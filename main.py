@@ -34,10 +34,10 @@ class CartItem:
 # ==========================================
 
 events = [
-    Event("Concert Night", 150, "Riyadh", "8:00 PM", "2026-10-10"),
-    Event("Comedy Show", 100, "Jeddah", "9:00 PM", "2026-10-15"),
-    Event("Theater Play", 80, "Riyadh", "7:30 PM", "2026-10-20"),
-    Event("Music Festival", 200, "Riyadh", "6:00 PM", "2026-10-25")
+    Event("Boulevard World", 150, "Riyadh", "8:00 PM", "2026-10-10"),
+    Event("Comedy Show", 100, "Riyadh", "9:00 PM", "2026-10-15"),
+    Event("Kingdom Arena Boxing Night", 80, "Riyadh", "7:30 PM", "2026-10-20"),
+    Event("Winter Wonderland", 200, "Riyadh", "6:00 PM", "2026-10-25")
 ]
 
 cart = []
