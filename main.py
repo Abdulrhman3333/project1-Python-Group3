@@ -4,12 +4,14 @@
 
 class Event:
 
-    def __init__(self, name, price, location, time, date):
+    def __init__(self, name, price, location, time, date, parking_capacity=50):
         self.name = name
         self.price = price
         self.location = location
         self.time = time
         self.date = date
+        self.parking_capacity = parking_capacity
+        self.parking_reserved = 0
 
     def display_details(self):
         print(f"Title: {self.name}")
@@ -29,6 +31,16 @@ class CartItem:
         return self.event.price * self.tickets
 
 
+class ParkingReservation:
+
+    def __init__(self, event, spots):
+        self.event = event
+        self.spots = spots
+
+    def total_price(self):
+        return self.spots * PARKING_PRICE
+
+
 # ==========================================
 # Data
 # ==========================================
@@ -41,6 +53,10 @@ events = [
 ]
 
 cart = []
+my_tickets = []
+parking_reservations = []
+
+PARKING_PRICE = 20
 
 
 # ==========================================
@@ -247,10 +263,101 @@ def checkout():
         print("Reservation confirmed successfully!")
         print("Thank you for your reservation.")
 
+        for item in cart:
+            my_tickets.append(CartItem(item.event, item.tickets))
+
         cart.clear()
 
     else:
         print("Reservation cancelled.")
+
+
+# ==========================================
+# 👥 NEW FEATURES
+# ==========================================
+
+
+# 9. Sell a purchased ticket
+
+def sell_ticket():
+
+    if len(my_tickets) == 0:
+        print("\nYou have no tickets to sell.")
+        return
+
+    print("\n===== My Tickets =====")
+
+    for i in range(len(my_tickets)):
+        ticket = my_tickets[i]
+        print(f"{i + 1}. {ticket.event.name} - {ticket.tickets} ticket(s)")
+
+    choice = int(input("\nEnter ticket number to sell: "))
+
+    if choice >= 1 and choice <= len(my_tickets):
+
+        ticket = my_tickets[choice - 1]
+
+        amount = int(input(f"Enter number of tickets to sell (max {ticket.tickets}): "))
+
+        if amount >= 1 and amount <= ticket.tickets:
+
+            refund = amount * ticket.event.price
+
+            ticket.tickets -= amount
+
+            if ticket.tickets == 0:
+                my_tickets.pop(choice - 1)
+
+            print(f"You sold {amount} ticket(s) for {ticket.event.name}.")
+            print(f"Refund amount: {refund} SAR")
+
+        else:
+            print("Invalid number of tickets.")
+
+    else:
+        print("Invalid ticket number.")
+
+
+# 10. Reserve parking for an event
+
+def reserve_parking():
+
+    show_events()
+
+    choice = int(input("\nEnter event number: "))
+
+    if choice >= 1 and choice <= len(events):
+
+        selected_event = events[choice - 1]
+
+        available = selected_event.parking_capacity - selected_event.parking_reserved
+
+        print(f"\nAvailable parking spots: {available}")
+        print(f"Price per spot: {PARKING_PRICE} SAR")
+
+        if available == 0:
+            print("No parking spots available for this event.")
+            return
+
+        spots = int(input("Enter number of parking spots to reserve: "))
+
+        if spots >= 1 and spots <= available:
+
+            selected_event.parking_reserved += spots
+
+            parking_reservations.append(ParkingReservation(selected_event, spots))
+
+            total = spots * PARKING_PRICE
+
+            print(f"\nParking reserved for {selected_event.name}.")
+            print(f"Spots reserved: {spots}")
+            print(f"Total: {total} SAR")
+
+        else:
+            print("Invalid number of parking spots.")
+
+    else:
+        print("Invalid event number.")
 
 
 # ==========================================
@@ -271,7 +378,9 @@ while True:
     print("6. List all events in cart")
     print("7. Modify number of tickets")
     print("8. Checkout")
-    print("9. Exit")
+    print("9. Sell a ticket")
+    print("10. Reserve parking")
+    print("11. Exit")
 
     choice = input("\nEnter your choice: ")
 
@@ -300,6 +409,12 @@ while True:
         checkout()
 
     elif choice == "9":
+        sell_ticket()
+
+    elif choice == "10":
+        reserve_parking()
+
+    elif choice == "11":
         print("Thank you for using the Entertainment Events platform!")
         break
 
