@@ -1,4 +1,4 @@
 print("hello1")
 print("aljoharh")
 print("aljoharh")
-primt("aljoharh")
+print("aljoharh")
