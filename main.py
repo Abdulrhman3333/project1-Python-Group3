@@ -134,15 +134,9 @@ def add_to_list(items, event, amount, is_parking):
 
 def cart_total():
 
-    total = 0
+    item_total = lambda item: item.total_price()
 
-    for item in cart:
-        total += item.total_price()
-
-    for item in parking_cart:
-        total += item.total_price()
-
-    return total
+    return sum(map(item_total, cart)) + sum(map(item_total, parking_cart))
 
 
 def save_data():
