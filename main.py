@@ -1,10 +1,18 @@
+import json
+import os
+
 # ==========================================
 # OOP
 # ==========================================
 
+DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json")
+
+PARKING_PRICE = 20
+
+
 class Event:
 
-    def __init__(self, name, price, location, time, date, parking_capacity=50):
+    def __init__(self, name, price, location, time, date, parking_capacity=50, tickets_available=100):
         self.name = name
         self.price = price
         self.location = location
@@ -12,6 +20,10 @@ class Event:
         self.date = date
         self.parking_capacity = parking_capacity
         self.parking_reserved = 0
+        self.tickets_available = tickets_available
+
+    def parking_available(self):
+        return self.parking_capacity - self.parking_reserved
 
     def display_details(self):
         print(f"Title: {self.name}")
@@ -19,6 +31,8 @@ class Event:
         print(f"Location: {self.location}")
         print(f"Time: {self.time}")
         print(f"Date: {self.date}")
+        print(f"Tickets left: {self.tickets_available}")
+        print(f"Parking spots left: {self.parking_available()} ({PARKING_PRICE} SAR per spot)")
 
 
 class CartItem:
@@ -46,17 +60,129 @@ class ParkingReservation:
 # ==========================================
 
 events = [
-    Event("Boulevard World", 250, "Riyadh", "8:00 PM", "2026-10-10"),
-    Event("Comedy Show", 100, "Riyadh", "9:00 PM", "2026-10-15"),
-    Event("Kingdom Arena Boxing Night", 80, "Riyadh", "7:30 PM", "2026-10-20"),
-    Event("Winter Wonderland", 200, "Riyadh", "6:00 PM", "2026-10-25")
+    Event("Boulevard World", 250, "Riyadh", "8:00 PM", "2026-10-10", tickets_available=100),
+    Event("Comedy Show", 100, "Riyadh", "9:00 PM", "2026-10-15", tickets_available=60),
+    Event("Kingdom Arena Boxing Night", 80, "Riyadh", "7:30 PM", "2026-10-20", tickets_available=80),
+    Event("Winter Wonderland", 200, "Riyadh", "6:00 PM", "2026-10-25", tickets_available=40)
 ]
 
-cart = []
-my_tickets = []
-parking_reservations = []
+cart = []                    # tickets waiting for checkout
+parking_cart = []            # parking waiting for checkout
+my_tickets = []              # tickets already bought
+parking_reservations = []    # parking already reserved
 
-PARKING_PRICE = 20
+
+# ==========================================
+# Helpers
+# ==========================================
+
+# Asks until the user enters a number from low to high (0 = go back, returns None)
+
+def get_number(prompt, low, high):
+
+    while True:
+
+        text = input(f"{prompt} (0 to go back): ").strip()
+
+        if text.isdigit():
+
+            number = int(text)
+
+            if number == 0:
+                return None
+
+            if number >= low and number <= high:
+                return number
+
+        print(f"Please enter a number between {low} and {high}, or 0 to go back.")
+
+
+# Shows the events and returns the one the user picked (or None)
+
+def pick_event():
+
+    show_events()
+
+    choice = get_number("\nEnter event number", 1, len(events))
+
+    if choice is None:
+        return None
+
+    return events[choice - 1]
+
+
+# Adds tickets/spots to a list, merging with an existing item for the same event
+
+def add_to_list(items, event, amount, is_parking):
+
+    for item in items:
+
+        if item.event == event:
+
+            if is_parking:
+                item.spots += amount
+            else:
+                item.tickets += amount
+
+            return
+
+    if is_parking:
+        items.append(ParkingReservation(event, amount))
+    else:
+        items.append(CartItem(event, amount))
+
+
+def cart_total():
+
+    total = 0
+
+    for item in cart:
+        total += item.total_price()
+
+    for item in parking_cart:
+        total += item.total_price()
+
+    return total
+
+
+def save_data():
+
+    data = {
+        "tickets_available": {e.name: e.tickets_available for e in events},
+        "parking_reserved": {e.name: e.parking_reserved for e in events},
+        "my_tickets": {t.event.name: t.tickets for t in my_tickets},
+        "parking_reservations": {p.event.name: p.spots for p in parking_reservations}
+    }
+
+    with open(DATA_FILE, "w") as file:
+        json.dump(data, file, indent=2)
+
+
+def load_data():
+
+    if not os.path.exists(DATA_FILE):
+        return
+
+    try:
+        with open(DATA_FILE) as file:
+            data = json.load(file)
+    except (json.JSONDecodeError, OSError):
+        print("Saved data could not be read. Starting fresh.")
+        return
+
+    for event in events:
+
+        event.tickets_available = data.get("tickets_available", {}).get(event.name, event.tickets_available)
+        event.parking_reserved = data.get("parking_reserved", {}).get(event.name, 0)
+
+        tickets = data.get("my_tickets", {}).get(event.name, 0)
+        spots = data.get("parking_reservations", {}).get(event.name, 0)
+
+        if tickets > 0:
+            my_tickets.append(CartItem(event, tickets))
+
+        if spots > 0:
+            parking_reservations.append(ParkingReservation(event, spots))
 
 
 # ==========================================
@@ -72,35 +198,40 @@ def show_events():
     print("\n===== Available Events =====")
 
     for i in range(len(events)):
-        print(f"{i + 1}. {events[i].name} - {events[i].price} SAR")
+
+        event = events[i]
+
+        if event.tickets_available == 0:
+            status = "SOLD OUT"
+        else:
+            status = f"{event.tickets_available} left"
+
+        print(f"{i + 1}. {event.name} - {event.price} SAR ({status})")
 
 
 # 2. View event details
 
 def view_event_details():
 
-    show_events()
+    event = pick_event()
 
-    choice = int(input("\nEnter event number: "))
-
-    if choice >= 1 and choice <= len(events):
-        events[choice - 1].display_details()
-
-    else:
-        print("Invalid event number.")
+    if event is not None:
+        print()
+        event.display_details()
 
 
 # 3. Search for an event by name
 
 def search_event():
 
-    name = input("\nEnter event name to search: ")
+    name = input("\nEnter event name to search: ").strip()
 
     found = False
 
     for event in events:
 
         if name.lower() in event.name.lower():
+            print()
             event.display_details()
             found = True
 
@@ -118,29 +249,29 @@ def search_event():
 
 def add_to_cart():
 
-    show_events()
+    selected_event = pick_event()
 
-    choice = int(input("\nEnter event number: "))
+    if selected_event is None:
+        return
 
-    if choice >= 1 and choice <= len(events):
+    in_cart = 0
 
-        selected_event = events[choice - 1]
+    for item in cart:
 
-        found = False
+        if item.event == selected_event:
+            in_cart = item.tickets
 
-        for item in cart:
+    if in_cart + 1 > selected_event.tickets_available:
+        print(f"Sorry, no more tickets available for {selected_event.name}.")
+        return
 
-            if item.event == selected_event:
-                item.tickets += 1
-                found = True
-                print("Ticket quantity increased.")
-
-        if found == False:
-            cart.append(CartItem(selected_event))
-            print(f"{selected_event.name} added to your cart.")
+    if in_cart > 0:
+        add_to_list(cart, selected_event, 1, False)
+        print("Ticket quantity increased.")
 
     else:
-        print("Invalid event number.")
+        add_to_list(cart, selected_event, 1, False)
+        print(f"{selected_event.name} added to your cart.")
 
 
 # 5. Remove an event ticket from cart
@@ -148,21 +279,19 @@ def add_to_cart():
 def remove_from_cart():
 
     if len(cart) == 0:
-        print("\nYour cart is empty.")
+        print("\nYour cart has no tickets.")
         return
 
     show_cart()
 
-    choice = int(input("\nEnter cart item number to remove: "))
+    choice = get_number("\nEnter cart item number to remove", 1, len(cart))
 
-    if choice >= 1 and choice <= len(cart):
+    if choice is None:
+        return
 
-        removed_item = cart.pop(choice - 1)
+    removed_item = cart.pop(choice - 1)
 
-        print(f"{removed_item.event.name} removed from your cart.")
-
-    else:
-        print("Invalid cart item number.")
+    print(f"{removed_item.event.name} removed from your cart.")
 
 
 # 6. List all events currently in cart
@@ -171,25 +300,38 @@ def show_cart():
 
     print("\n===== Your Cart =====")
 
-    if len(cart) == 0:
+    if len(cart) == 0 and len(parking_cart) == 0:
         print("Your cart is empty.")
         return
 
-    total = 0
+    if len(cart) > 0:
 
-    for i in range(len(cart)):
+        print("Tickets:")
 
-        item = cart[i]
+        for i in range(len(cart)):
 
-        print(f"{i + 1}. {item.event.name}")
-        print(f"   Tickets: {item.tickets}")
-        print(f"   Price per ticket: {item.event.price} SAR")
-        print(f"   Total: {item.total_price()} SAR")
+            item = cart[i]
 
-        total += item.total_price()
+            print(f"{i + 1}. {item.event.name}")
+            print(f"   Tickets: {item.tickets}")
+            print(f"   Price per ticket: {item.event.price} SAR")
+            print(f"   Total: {item.total_price()} SAR")
+
+    if len(parking_cart) > 0:
+
+        print("Parking:")
+
+        for i in range(len(parking_cart)):
+
+            item = parking_cart[i]
+
+            print(f"{i + 1}. {item.event.name}")
+            print(f"   Spots: {item.spots}")
+            print(f"   Price per spot: {PARKING_PRICE} SAR")
+            print(f"   Total: {item.total_price()} SAR")
 
     print("------------------------")
-    print(f"Cart Total: {total} SAR")
+    print(f"Cart Total: {cart_total()} SAR")
 
 
 # ==========================================
@@ -202,39 +344,41 @@ def show_cart():
 def modify_tickets():
 
     if len(cart) == 0:
-        print("\nYour cart is empty.")
+        print("\nYour cart has no tickets.")
         return
 
     show_cart()
 
-    choice = int(input("\nEnter cart item number: "))
+    choice = get_number("\nEnter cart item number", 1, len(cart))
 
-    if choice >= 1 and choice <= len(cart):
+    if choice is None:
+        return
 
-        number = int(input("Enter new number of tickets: "))
+    item = cart[choice - 1]
 
-        if number > 0:
-            cart[choice - 1].tickets = number
-            print("Ticket quantity updated.")
+    if item.event.tickets_available == 0:
+        print("This event is sold out.")
+        return
 
-        else:
-            print("Number of tickets must be greater than 0.")
+    number = get_number(f"Enter new number of tickets (max {item.event.tickets_available})",
+                        1, item.event.tickets_available)
 
-    else:
-        print("Invalid cart item number.")
+    if number is None:
+        return
+
+    item.tickets = number
+    print("Ticket quantity updated.")
 
 
 # 8. Checkout
 
 def checkout():
 
-    if len(cart) == 0:
+    if len(cart) == 0 and len(parking_cart) == 0:
         print("\nYour cart is empty.")
         return
 
     print("\n===== Checkout =====")
-
-    total = 0
 
     for item in cart:
 
@@ -243,13 +387,32 @@ def checkout():
         print(f"Total: {item.total_price()} SAR")
         print("------------------------")
 
-        total += item.total_price()
+    for item in parking_cart:
+
+        print(f"Event: {item.event.name}")
+        print(f"Parking spots: {item.spots}")
+        print(f"Total: {item.total_price()} SAR")
+        print("------------------------")
+
+    total = cart_total()
 
     print(f"Grand Total: {total} SAR")
 
-    confirm = input("Confirm reservation? (yes/no): ")
+    confirm = input("Confirm reservation? (yes/no): ").strip().lower()
 
-    if confirm.lower() == "yes":
+    if confirm == "yes" or confirm == "y":
+
+        for item in cart:
+
+            if item.tickets > item.event.tickets_available:
+                print(f"Sorry, not enough tickets left for {item.event.name}. Please update your cart.")
+                return
+
+        for item in parking_cart:
+
+            if item.spots > item.event.parking_available():
+                print(f"Sorry, not enough parking left for {item.event.name}. Please update your cart.")
+                return
 
         print("\n===== Reservation Confirmation =====")
 
@@ -259,14 +422,26 @@ def checkout():
             print(f"Tickets: {item.tickets}")
             print(f"Total: {item.total_price()} SAR")
 
+            item.event.tickets_available -= item.tickets
+            add_to_list(my_tickets, item.event, item.tickets, False)
+
+        for item in parking_cart:
+
+            print(f"Event: {item.event.name}")
+            print(f"Parking spots: {item.spots}")
+            print(f"Total: {item.total_price()} SAR")
+
+            item.event.parking_reserved += item.spots
+            add_to_list(parking_reservations, item.event, item.spots, True)
+
         print(f"\nGrand Total: {total} SAR")
         print("Reservation confirmed successfully!")
         print("Thank you for your reservation.")
 
-        for item in cart:
-            my_tickets.append(CartItem(item.event, item.tickets))
-
         cart.clear()
+        parking_cart.clear()
+
+        save_data()
 
     else:
         print("Reservation cancelled.")
@@ -282,7 +457,7 @@ def checkout():
 def sell_ticket():
 
     if len(my_tickets) == 0:
-        print("\nYou have no tickets to sell.")
+        print("\nYou have no tickets to sell. Tickets appear here after a confirmed checkout.")
         return
 
     print("\n===== My Tickets =====")
@@ -291,78 +466,161 @@ def sell_ticket():
         ticket = my_tickets[i]
         print(f"{i + 1}. {ticket.event.name} - {ticket.tickets} ticket(s)")
 
-    choice = int(input("\nEnter ticket number to sell: "))
+    choice = get_number("\nEnter ticket number to sell", 1, len(my_tickets))
 
-    if choice >= 1 and choice <= len(my_tickets):
+    if choice is None:
+        return
 
-        ticket = my_tickets[choice - 1]
+    ticket = my_tickets[choice - 1]
 
-        amount = int(input(f"Enter number of tickets to sell (max {ticket.tickets}): "))
+    amount = get_number(f"Enter number of tickets to sell (max {ticket.tickets})", 1, ticket.tickets)
 
-        if amount >= 1 and amount <= ticket.tickets:
+    if amount is None:
+        return
 
-            refund = amount * ticket.event.price
+    refund = amount * ticket.event.price
 
-            ticket.tickets -= amount
+    ticket.tickets -= amount
+    ticket.event.tickets_available += amount
 
-            if ticket.tickets == 0:
-                my_tickets.pop(choice - 1)
+    if ticket.tickets == 0:
+        my_tickets.remove(ticket)
 
-            print(f"You sold {amount} ticket(s) for {ticket.event.name}.")
-            print(f"Refund amount: {refund} SAR")
+    save_data()
 
-        else:
-            print("Invalid number of tickets.")
-
-    else:
-        print("Invalid ticket number.")
+    print(f"You sold {amount} ticket(s) for {ticket.event.name}.")
+    print(f"Refund amount: {refund} SAR")
 
 
-# 10. Reserve parking for an event
+# 10. Reserve parking for an event (added to the cart, paid at checkout)
 
 def reserve_parking():
 
-    show_events()
+    selected_event = pick_event()
 
-    choice = int(input("\nEnter event number: "))
+    if selected_event is None:
+        return
 
-    if choice >= 1 and choice <= len(events):
+    in_cart = 0
 
-        selected_event = events[choice - 1]
+    for item in parking_cart:
 
-        available = selected_event.parking_capacity - selected_event.parking_reserved
+        if item.event == selected_event:
+            in_cart = item.spots
 
-        print(f"\nAvailable parking spots: {available}")
-        print(f"Price per spot: {PARKING_PRICE} SAR")
+    available = selected_event.parking_available() - in_cart
 
-        if available == 0:
-            print("No parking spots available for this event.")
-            return
+    print(f"\nAvailable parking spots: {available}")
+    print(f"Price per spot: {PARKING_PRICE} SAR")
 
-        spots = int(input("Enter number of parking spots to reserve: "))
+    if available <= 0:
+        print("No parking spots available for this event.")
+        return
 
-        if spots >= 1 and spots <= available:
+    spots = get_number("Enter number of parking spots to reserve", 1, available)
 
-            selected_event.parking_reserved += spots
+    if spots is None:
+        return
 
-            parking_reservations.append(ParkingReservation(selected_event, spots))
+    add_to_list(parking_cart, selected_event, spots, True)
 
-            total = spots * PARKING_PRICE
+    print(f"{spots} parking spot(s) for {selected_event.name} added to your cart.")
 
-            print(f"\nParking reserved for {selected_event.name}.")
-            print(f"Spots reserved: {spots}")
-            print(f"Total: {total} SAR")
 
-        else:
-            print("Invalid number of parking spots.")
+# 11. Remove parking from cart
 
-    else:
-        print("Invalid event number.")
+def remove_parking_from_cart():
+
+    if len(parking_cart) == 0:
+        print("\nYour cart has no parking.")
+        return
+
+    show_cart()
+
+    choice = get_number("\nEnter parking item number to remove", 1, len(parking_cart))
+
+    if choice is None:
+        return
+
+    removed_item = parking_cart.pop(choice - 1)
+
+    print(f"Parking for {removed_item.event.name} removed from your cart.")
+
+
+# 12. Cancel a parking reservation
+
+def cancel_parking():
+
+    if len(parking_reservations) == 0:
+        print("\nYou have no parking reservations. They appear here after a confirmed checkout.")
+        return
+
+    print("\n===== My Parking =====")
+
+    for i in range(len(parking_reservations)):
+        parking = parking_reservations[i]
+        print(f"{i + 1}. {parking.event.name} - {parking.spots} spot(s)")
+
+    choice = get_number("\nEnter parking number to cancel", 1, len(parking_reservations))
+
+    if choice is None:
+        return
+
+    parking = parking_reservations[choice - 1]
+
+    amount = get_number(f"Enter number of spots to cancel (max {parking.spots})", 1, parking.spots)
+
+    if amount is None:
+        return
+
+    refund = amount * PARKING_PRICE
+
+    parking.spots -= amount
+    parking.event.parking_reserved -= amount
+
+    if parking.spots == 0:
+        parking_reservations.remove(parking)
+
+    save_data()
+
+    print(f"You cancelled {amount} parking spot(s) for {parking.event.name}.")
+    print(f"Refund amount: {refund} SAR")
+
+
+# 13. View my tickets and parking
+
+def show_my_bookings():
+
+    print("\n===== My Bookings =====")
+
+    if len(my_tickets) == 0 and len(parking_reservations) == 0:
+        print("You have no tickets or parking yet.")
+        return
+
+    print("Tickets:")
+
+    if len(my_tickets) == 0:
+        print("  (none)")
+
+    for i in range(len(my_tickets)):
+        ticket = my_tickets[i]
+        print(f"  {i + 1}. {ticket.event.name} ({ticket.event.date}) - {ticket.tickets} ticket(s)")
+
+    print("Parking:")
+
+    if len(parking_reservations) == 0:
+        print("  (none)")
+
+    for i in range(len(parking_reservations)):
+        parking = parking_reservations[i]
+        print(f"  {i + 1}. {parking.event.name} ({parking.event.date}) - {parking.spots} spot(s)")
 
 
 # ==========================================
 # MAIN PROGRAM
 # ==========================================
+
+load_data()
 
 while True:
 
@@ -380,9 +638,12 @@ while True:
     print("8. Checkout")
     print("9. Sell a ticket")
     print("10. Reserve parking")
-    print("11. Exit")
+    print("11. Remove parking from cart")
+    print("12. Cancel parking")
+    print("13. My tickets and parking")
+    print("14. Exit")
 
-    choice = input("\nEnter your choice: ")
+    choice = input("\nEnter your choice: ").strip()
 
     if choice == "1":
         show_events()
@@ -415,6 +676,16 @@ while True:
         reserve_parking()
 
     elif choice == "11":
+        remove_parking_from_cart()
+
+    elif choice == "12":
+        cancel_parking()
+
+    elif choice == "13":
+        show_my_bookings()
+
+    elif choice == "14":
+        save_data()
         print("Thank you for using the Entertainment Events platform!")
         break
 
