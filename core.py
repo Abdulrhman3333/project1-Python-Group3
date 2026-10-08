@@ -1,7 +1,4 @@
-"""Events logic, reused from main.py but with no print(), no input() and no while-loop.
 
-Every action returns (ok, message) so ANY interface (console, Streamlit, API) can show it.
-"""
 import json
 import os
 
@@ -58,7 +55,7 @@ def _merge(items, event, amount, kind):
 
 
 class Store:
-    """Holds all state. The UI creates ONE of these and keeps it in st.session_state."""
+    
 
     def __init__(self):
         self.events = [
@@ -76,7 +73,7 @@ class Store:
     def cart_total(self):
         return sum(i.total_price() for i in self.cart + self.parking_cart)
 
-    # ---------- cart: tickets ----------
+    
     def add_ticket(self, event):
         item = _find(self.cart, event)
         in_cart = item.tickets if item else 0
@@ -104,7 +101,7 @@ class Store:
             self.cart.remove(item)
         return True, f"{event.name} removed from your cart."
 
-    # ---------- cart: parking ----------
+   
     def add_parking(self, event, spots):
         item = _find(self.parking_cart, event)
         in_cart = item.spots if item else 0
@@ -119,7 +116,7 @@ class Store:
             self.parking_cart.remove(item)
         return True, f"Parking for {event.name} removed from your cart."
 
-    # ---------- checkout ----------
+   
     def checkout(self):
         if not self.cart and not self.parking_cart:
             return False, "Your cart is empty."
@@ -142,7 +139,7 @@ class Store:
         self.save()
         return True, f"Booking confirmed. You paid {total} SAR."
 
-    # ---------- after purchase ----------
+    
     def sell_ticket(self, event, amount=1):
         item = _find(self.my_tickets, event)
         if item is None or amount > item.tickets:
@@ -165,7 +162,7 @@ class Store:
         self.save()
         return True, f"Cancelled {amount} spot(s). Refund: {amount * PARKING_PRICE} SAR."
 
-    # ---------- persistence (same data.json format as main.py) ----------
+    
     def save(self):
         data = {
             "tickets_available": {e.name: e.tickets_available for e in self.events},
